@@ -1,0 +1,72 @@
+{
+    "devices":{
+        "FC:B4:67:4E:85:1E":{
+            "name":"AQMon1",
+            "notifyOnChangeState":{
+                "notifyOnFirstConnect":false,
+                "connect":{"sensors/airQuality/status/AQMon1":{"connected":true}},
+                "disconnect":{"sensors/airQuality/status/AQMon1":{"connected":false}}
+            },
+            "updateInterval":5,
+            "reconnectInterval":10,
+
+            "services":{
+                "0000181a-0000-1000-8000-00805f9b34fb":{
+                    "name":"EnviromentalSensing",
+                    
+                    "characteristics":{
+                        "00002a6e-0000-1000-8000-00805f9b34fb":{"name":"temperatueSCD","loadAs":"int","format":"x :float(x/100)","subscribe":true},
+                        "00002a6f-0000-1000-8000-00805f9b34fb":{"name":"humidity","loadAs":"int","format":"x :float(x/100)"},
+                        "00002b8c-0000-1000-8000-00805f9b34fb":{"name":"Co2","loadAs":"int","format":"x : x"},
+    
+                        "00002a1f-0000-1000-8000-00805f9b34fb":{"name":"temperatueBMP","loadAs":"int","format":"x :float(x/10)","subscribe":true},
+                        "00002a6d-0000-1000-8000-00805f9b34fb":{"name":"pressure","loadAs":"int","format":"x : int(x)"},
+    
+                        "00002bd5-0000-1000-8000-00805f9b34fb":{"name":"PM1_0","loadAs":"float","format":"x : int(x)","subscribe":true},
+                        "00002bd6-0000-1000-8000-00805f9b34fb":{"name":"PM2_5","loadAs":"float","format":"x : int(x)"},
+                        "00002bd7-0000-1000-8000-00805f9b34fb":{"name":"PM10_0","loadAs":"float","format":"x : int(x)"},
+    
+                        "058d6250-21a7-469d-ab7f-f3fe260388a2":{"name":"N10_0","loadAs":"int","format":"x : int(x)","subscribe":true},
+                        "bc97c96c-072f-4b09-aa01-0deae4eb9a26":{"name":"N5_0","loadAs":"int","format":"x : int(x)"},
+                        "553ff836-97d2-4b6c-93ff-4abf7b00112f":{"name":"N2_5","loadAs":"int","format":"x : int(x)"},
+                        "3402d95f-317c-4915-9efd-f73d13ef9b2c":{"name":"N1_0","loadAs":"int","format":"x : int(x)"},
+                        "517b441e-2d87-41cb-ae81-625ef34c2e49":{"name":"N0_5","loadAs":"int","format":"x : int(x)"},
+                        "b884812d-094f-4c0d-8ff0-f530f5ed7208":{"name":"N0_3","loadAs":"int","format":"x : int(x)"}
+                    }
+                }
+            }
+        }
+    },
+    "mqtt":{
+        "serverAddress":"mqttServer Adress",
+        "username":"mqtt-login",
+        "password":"matt-password",
+        "topics":{
+            "toSendTo":{
+                "sensors/airQuality/data":{
+                    "checkInterval":1,
+                    "payload":{
+                        "Co2_PPM":"$AQMon1.EnviromentalSensing.Co2&",
+                        "SCD_Temp":"$AQMon1.EnviromentalSensing.temperatueSCD&",
+                        "Humidity":"$AQMon1.EnviromentalSensing.humidity&",
+                        "BMP_Temp":"$AQMon1.EnviromentalSensing.temperatueBMP&",
+                        "Pressure":"$AQMon1.EnviromentalSensing.pressure&",
+                        "PM1_0":"$AQMon1.EnviromentalSensing.PM1_0&",
+                        "PM2_5":"$AQMon1.EnviromentalSensing.PM2_5&",
+                        "PM10_0":"$AQMon1.EnviromentalSensing.PM10_0&",
+                        "N10_0":"$AQMon1.EnviromentalSensing.N10_0&",
+                        "N5_0":"$AQMon1.EnviromentalSensing.N5_0&",
+                        "N2_5":"$AQMon1.EnviromentalSensing.N2_5&",
+                        "N1_0":"$AQMon1.EnviromentalSensing.N1_0&",
+                        "N0_5":"$AQMon1.EnviromentalSensing.N0_5&",
+                        "N0_3":"$AQMon1.EnviromentalSensing.N0_3&"
+                    },
+                    "sendOn":[
+                    {"type":"equation","toEval":"($AQMon1.EnviromentalSensing.Co2.isUpdated& or $AQMon1.EnviromentalSensing.Co2.isChanged& )and $AQMon1.EnviromentalSensing.Co2.data&!=0"}
+                    ]
+                }
+            }
+        }
+    }
+
+}
