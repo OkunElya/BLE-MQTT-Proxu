@@ -7,17 +7,19 @@ import json
 from paho.mqtt import client as MQTTClient
 import re
 import time
+import random 
+import extensions 
 
 with open("config.json") as F:
     config=json.load(F)
 
 
 
-mqttClient=MQTTClient.Client(MQTTClient.CallbackAPIVersion.VERSION2,"BLE proxy")
+mqttClient=MQTTClient.Client(MQTTClient.CallbackAPIVersion.VERSION2, f"BLE proxy-{''.join(random.choices('abcdefghijklmnopqrstuvwxyz0123456789', k=4))}")
 mqttServerAddress=config["mqtt"]["serverAddress"].split(":")[0]
 mqttPort=1883
 if ":" in config["mqtt"]["serverAddress"]:
-    mqttPort=config["mqtt"]["serverAddress"].split(":")[-1]
+    mqttPort=int(config["mqtt"]["serverAddress"].split(":")[-1])
 
 def onMqttConnect(client, userdata, flags, rc,xd):
     if rc == 0:
@@ -114,7 +116,7 @@ async def bleTask(devAddr,deviceConfig):
         updateInterval=deviceConfig["updateInterval"]
     if "reconnectInterval" in deviceConfig.keys():
         reconnectInterval=deviceConfig["reconnectInterval"]
-    services=None
+
     
     def loadChar(charConfig,value):
         try: 
@@ -124,7 +126,8 @@ async def bleTask(devAddr,deviceConfig):
                 loaded=struct.unpack("f", value)[0]
             elif charConfig["loadAs"]=="string":
                 loaded=value.decode( "encoding" in charConfig.keys() if  charConfig["encoding"] else 'utf-8' )#requires tesing
-                loaded=struct.unpack("f",value)[0]
+            elif charConfig["loadAs"]=="bytes":
+                loaded=bytes(value)
             
         except Exception as e:
             #failed to load value, probably wrong type
