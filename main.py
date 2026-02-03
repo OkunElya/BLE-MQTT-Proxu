@@ -75,7 +75,7 @@ def parse_inp(data, values,modifier=None,funcToRunOnReplace=None):
     else:
         return data
 
-async def bleTask(devAddr,deviceConfig):
+async def bleTask(devAddr,deviceConfig:dict):
     devData=devicesData[device["name"]]
     devData["isFirstConnect"]=True
     configuredServices=deviceConfig["services"]
@@ -110,12 +110,8 @@ async def bleTask(devAddr,deviceConfig):
     
     bleClient = BleakClient(devAddr,disconnectCallback,winrt=dict(use_cached_services=False))
 
-    updateInterval=10
-    reconnectInterval=60
-    if "updateInterval" in deviceConfig.keys():
-        updateInterval=deviceConfig["updateInterval"]
-    if "reconnectInterval" in deviceConfig.keys():
-        reconnectInterval=deviceConfig["reconnectInterval"]
+    updateInterval=deviceConfig.get("updateInterval",10)
+    reconnectInterval=deviceConfig.get("reconnectInterval",60)
 
     
     def loadChar(charConfig,value):
@@ -134,9 +130,12 @@ async def bleTask(devAddr,deviceConfig):
             print(f"Failed to read characteristic {charConfig['name']} from service {configuredService['name']} in device {deviceConfig['name']} at address {devAddr}: {e}\n maybe bad format of loaded varible")
             return None
         try:
-            #apply format from config
-            func=eval(f"(lambda {charConfig['format']})")
-            formated=func(loaded)
+            if "format" in charConfig.keys():
+                #apply format from config
+                func=eval(f"(lambda {charConfig['format']})")
+                formated=func(loaded)
+            else:
+                formated = loaded
             dataStored=devicesData[deviceConfig["name"]][configuredService["name"]][charConfig["name"]]
             if dataStored["data"]!=formated:
                 dataStored["data"]=formated
