@@ -1,5 +1,5 @@
 import extensions
-
+from extensions import format as fmt
 import asyncio
 import threading
 from bleak import BleakClient, exc
@@ -16,8 +16,8 @@ from typing import Any
 class Characteristics:
     name: str
     uuid: str
-    read_as: function | None
-    write_as: function | None
+    read_as: Any | None
+    write_as: Any | None
     can_read: bool = True
     can_subscribe: bool = False
     can_write: bool = False
@@ -42,7 +42,7 @@ class Characteristics:
         read_as_func = None
         if "read_as" in data.keys():
             try:
-                func = eval(f"lambda {data['read_as']}", locals() + globals())
+                func = eval(f"lambda {data['read_as']}",{**locals() , **globals()})
             except:
                 raise ValueError(
                     f"Failed to evaluate read_as function: {data['read_as']}"
@@ -61,7 +61,7 @@ class Characteristics:
         write_as_func = None
         if "write_as" in data.keys():
             try:
-                func = eval(f"lambda {data['write_as']}", locals() | globals())
+                func = eval(f"lambda {data['write_as']}",{**locals() , **globals()})
             except:
                 raise ValueError(
                     f"Failed to evaluate write_as function: {data['write_as']}"
@@ -97,7 +97,7 @@ class Characteristics:
             return
         
         try:
-            value = await self._parent_link._parent_link.ble_client.read_gatt_char(self.uuid)
+            value = await self._parent_link._parent_link.ble_client.read_gatt_char(self._char_obj)
         except:
             # lost connection to device
             self.is_connected = False
@@ -107,9 +107,9 @@ class Characteristics:
         return self.value
 
     async def load_value(self,data):
-        value = None
+        retValue = None
         try:
-           value = await self.read_as(data)
+           retValue = await self.read_as(data)
 
         except Exception as e:
             # failed to load value, probably wrong type
@@ -117,8 +117,8 @@ class Characteristics:
                 f"Failed to evaluete characteristic {self.name} from service {self._parent_link.name} in device {self._parent_link._parent_link.name}: {e}\n maybe bad format of loaded varible"
             )
         self.is_updated = True
-        self.is_changed = self.value != value
-        self.value = value
+        self.is_changed = self.value != retValue
+        self.value = retValue
         
         return self.value
         
@@ -165,7 +165,7 @@ class Service:
 @dataclass
 class NotificationMessage:
     topic: str
-    message: Any[str, list, dict, int, float]
+    message:  str | list | dict | int | float
 
 
 class BleDevice:
@@ -278,7 +278,7 @@ class BleDevice:
                             )
                             continue
                         if char.can_subscribe:
-                            if "notify" in char.properties:
+                            if "notify" in char._char_obj.properties:
 
                                 async def notyfyCallback(
                                     char_obj: bleak.BleakGATTCharacteristic,
@@ -316,3 +316,26 @@ class BleDevice:
                 await char.read()  
 
        
+
+
+if __name__ == "__main__":
+    class Devices:
+        def __init__(self, config:dict):
+            for name,deviceConfig in config.items():
+                device = BleDevice(deviceConfig,name)
+                # asyncio.run_coroutine_threadsafe(device.read_values_loop(), asyncio.get_event_loop())
+                setattr(self,name,device)
+    
+            # Example config, replace with your actual config
+            config = {}
+            
+    with open("./config.json","r") as F:
+        config= json.load(F)["devices"]
+
+    devices = Devices(config)
+    loop = asyncio.get_event_loop()
+    pending = [device.read_values_loop() for device in devices.__dict__.values() if isinstance(device, BleDevice)]
+    loop.run_until_complete(asyncio.gather(*pending))
+        
+
+
