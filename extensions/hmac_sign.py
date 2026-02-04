@@ -6,6 +6,7 @@ if TYPE_CHECKING:
 
 
 async def get_salt(self) -> bytes:
+    self: device.Characteristics
     bluetooth_device = self._parent_link._parent_link
     salt_sertvice = bluetooth_device.services.get("Salt", None)
     if salt_sertvice is None:
@@ -17,7 +18,9 @@ async def get_salt(self) -> bytes:
     return bytes(salt_char.value)
 
 
-async def sign_postfix(self,msg:bytes):
+async def sign_postfix(self, msg:bytes):
+    self: device.Characteristics
+    
     key = self._parent_link._parent_link.secret_key
     if key is None:
         raise ValueError("Secret key missing, add 'secretKey' to the device section")

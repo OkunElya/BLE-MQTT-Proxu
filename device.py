@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 import textwrap
 
+
 #imports used inside value read/write functions
 
 from extensions import format as fmt
@@ -45,65 +46,105 @@ class Characteristics:
                 raise ValueError(
                     f"Missing required field '{field}' in characteristic definition"
                 )
-
-        if "readAs" in data.keys():
-            try:
-                read_func = eval(f"lambda {data['readAs']}",{**locals() , **globals(), "self":self})
-            except:
-                raise ValueError(
-                    f"Failed to evaluate readAs function: {data['readAs']}"
-                )
-
-            async def read_as(x):
-                try:
-                    return read_func(x)
-                except Exception as e:
-                    raise RuntimeError(
-                        f"Error occurred while executing read_as function: {e}"
-                    )
-
-            self.read_as = read_as
+                
+        scope = {
+            **globals(),
+            "self": self,
+            "fmt": fmt,
+            "extensions": extensions,
+            "__name__": __name__,
+        }
+        
 
         if "writeAs" in data.keys():
-            scope = {**locals() , **globals(),"self":self}
-            func = data['writeAs']
-            if "await" in func:
-                vals = [x.strip() for x in func.split(":")[0].split(",")]
-                code = func.split(":",1)[1]
+            write_func_text = data['writeAs']
+            write_func_args = [x.strip() for x in write_func_text.split(":")[0].split(",")]
+            write_func_body = write_func_text.split(":",1)[1]
+            
+            if "await" in write_func_text:
+                
                 asyncFunc = f"""
-                async def _write_as({', '.join(vals)}):
-                    return {code}
+                async def _write_as({', '.join(write_func_args)}):
+                    return {write_func_body}
                 """
                 asyncFunc = textwrap.dedent(asyncFunc)
-                exec(asyncFunc, globals(),locals())
-                write_as_func = locals()['_write_as']
+                exec(asyncFunc, scope,scope)
+                write_as_func = scope['_write_as']
                 
-                async def write_as(self,x):
+                async def write_as(x):
+                    call_args = dict({arg_name:{**locals(),**scope}[arg_name] for arg_name in write_func_args})
                     try:
-                        scope = { **globals(),**locals()}
-                        args = dict({arg_name:scope[arg_name] for arg_name in vals})
-                        return await write_as_func(**args)
+                        if len(write_func_args) == 1:
+                            call_args[write_func_args[0]] = x
+                        return await write_as_func(**call_args)
                     except Exception as e:
                         raise RuntimeError(
                             f"Error occurred while executing write_as coro: {e}"
                         )
             else:
                 try:
-                    func = eval(f"lambda {data['writeAs']}",scope)
+                    write_as_func = eval(f"lambda {write_func_text}",scope, scope)
                 except:
                     raise ValueError(
-                        f"Failed to evaluate writeAs function: {data['writeAs']}"
+                        f"Failed to evaluate writeAs function: {write_func_text}"
                     )
 
-                async def write_as(self,x):
+                async def write_as(x):
+                    call_args = dict({arg_name:{**locals(),**scope}[arg_name] for arg_name in write_func_args})
                     try:
-                        return func(x)
+                        if len(write_func_args) == 1:
+                            call_args[write_func_args[0]] = x
+                        return write_as_func(**call_args)
                     except Exception as e:
                         raise RuntimeError(
-                            f"Error occurred while executing write_as function: {e}"
+                            f"Error occurred while executing write_as coro: {e}"
                         )
             self.write_as = write_as
 
+        if "readAs" in data.keys():
+            read_func_text = data['readAs']
+            read_func_args = [x.strip() for x in read_func_text.split(":")[0].split(",")]
+            read_func_body = read_func_text.split(":",1)[1]
+            
+            if "await" in read_func_text:
+                
+                asyncFunc = f"""
+                async def _read_as({', '.join(read_func_args)}):
+                    return {read_func_body}
+                """
+                asyncFunc = textwrap.dedent(asyncFunc)
+                exec(asyncFunc, scope,scope)
+                read_as_func = scope['_read_as']
+                
+                async def write_as(x):
+                    call_args = dict({arg_name:{**locals(),**scope}[arg_name] for arg_name in read_func_args})
+                    try:
+                        if len(read_func_args) == 1:
+                            call_args[read_func_args[0]] = x
+                        return await read_as_func(**call_args)
+                    except Exception as e:
+                        raise RuntimeError(
+                            f"Error occurred while executing write_as coro: {e}"
+                        )
+            else:
+                try:
+                    read_as_func = eval(f"lambda {read_func_text}",scope, scope)
+                except:
+                    raise ValueError(
+                        f"Failed to evaluate readAs function: {read_func_text}"
+                    )
+
+                async def read_as(x):
+                    call_args = dict({arg_name:{**locals(),**scope}[arg_name] for arg_name in read_func_args})
+                    try:
+                        if len(read_func_args) == 1:
+                            call_args[read_func_args[0]] = x
+                        return read_as_func(**call_args)
+                    except Exception as e:
+                        raise RuntimeError(
+                            f"Error occurred while executing write_as coro: {e}"
+                        )
+            self.read_as = read_as
     
         self.name=name
         self.uuid=data["uuid"]
@@ -152,7 +193,7 @@ class Characteristics:
             raise RuntimeError(f"Config is forbidding  write to characteristic {self.name})")
         
         if self.write_as is not None:
-            value = bytes(await self.write_as(self,value))
+            value = bytes(await self.write_as(value))
             
         if not "write" in self._char_obj.properties:
             raise PermissionError(f"Can't write to characteristic {self.name} (write not allowed)")
