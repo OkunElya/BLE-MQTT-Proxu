@@ -7,7 +7,7 @@ if TYPE_CHECKING:
 
 async def get_salt(self) -> bytes:
     self: device.Characteristics
-    
+
     bluetooth_device = self._parent_link._parent_link
     salt_sertvice = bluetooth_device.services.get("Salt", None)
     if salt_sertvice is None:
@@ -16,6 +16,9 @@ async def get_salt(self) -> bytes:
     if salt_char is None:
         raise ValueError("'salt' characteristic not found in 'Salt' service")
     await salt_char.read()
+    if salt_char.value is None:
+        raise ValueError("Unable to fetch salt: 'salt' characteristic value is None")
+
     return bytes(salt_char.value)
 
 

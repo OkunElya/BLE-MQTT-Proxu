@@ -40,6 +40,7 @@ class Characteristics:
     is_changed: bool = False
 
     def __init__(self, data: dict, name: str):
+        self.logger = logging.getLogger()
         required_fields = ["uuid"]
         for field in required_fields:
             if field not in data:
@@ -186,9 +187,11 @@ class Characteristics:
                 f"Config is forbidding  read to characteristic {self.name})"
             )
         if self._char_obj is None:
-            self.logger.warning(f"Characteristic object for {self.name} is not initialized (device not connected yet).")
+            self.logger.warning(
+                f"Characteristic object for {self.name} is not initialized (device not connected yet)."
+            )
             return
-        
+
         if not "read" in self._char_obj.properties:
             self.logger.warning(
                 f"Characteristic {self.name} does not support read operation."
@@ -254,8 +257,10 @@ class Service:
     def __getattr__(self, name) -> Characteristics:
         if name in self.characteristics.keys():
             return self.characteristics[name]
-        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
-    
+        raise AttributeError(
+            f"'{self.__class__.__name__}' object has no attribute '{name}'"
+        )
+
     @classmethod
     def from_config(cls, data: dict, name: str):
         required_fields = ["uuid", "characteristics"]
@@ -348,8 +353,10 @@ class BleDevice:
     def __getattr__(self, name) -> Service:
         if name in self.services.keys():
             return self.services[name]
-        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
-    
+        raise AttributeError(
+            f"'{self.__class__.__name__}' object has no attribute '{name}'"
+        )
+
     def send_mqtt_message(self, topic: str, message: str):
         self.logger.info(f"Sending MQTT message to topic '{topic}': {message}")
         ...  # TODO
@@ -436,29 +443,33 @@ class BleDevice:
                 await char.read()
 
 
+class DeviceCollection:
+    devices: dict[str, BleDevice] = {}
+
+    devices_corutines: list = []
+
+    def __init__(self, config: dict):
+        for device_name, device_config in config.items():
+            device = BleDevice(device_config, device_name)
+            self.devices[device_name] = device
+            self.devices_corutines.append(device.read_values_loop())
+
+    def __getattr__(self, name) -> BleDevice:
+        if name in self.devices.keys():
+            return self.devices[name]
+        raise AttributeError(
+            f"'{self.__class__.__name__}' object has no attribute '{name}'"
+        )
+
+
 if __name__ == "__main__":
-
-    class Devices:
-        def __init__(self, config: dict):
-            for name, deviceConfig in config.items():
-                device = BleDevice(deviceConfig, name)
-                # asyncio.run_coroutine_threadsafe(device.read_values_loop(), asyncio.get_event_loop())
-                setattr(self, name, device)
-
-            # Example config, replace with your actual config
-            config = {}
-
     with open("./config.json", "r") as F:
         config = json.load(F)["devices"]
 
-    devices = Devices(config)
+    devices = DeviceCollection(config)
 
-    loop = asyncio.get_event_loop()
-    pending = [
-        device.read_values_loop()
-        for device in devices.__dict__.values()
-        if isinstance(device, BleDevice)
-    ]
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
 
     async def testWrtite():
         await asyncio.sleep(10)
@@ -467,5 +478,6 @@ if __name__ == "__main__":
         thermostat: BleDevice
         await thermostat.Thermostat.temperatureSetPoint.write(15)
 
+    pending = DeviceCollection.devices_corutines
     pending.append(testWrtite())
     loop.run_until_complete(asyncio.gather(*pending))
