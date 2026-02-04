@@ -8,17 +8,18 @@ from typing import Any
 import textwrap
 
 
-#imports used inside value read/write functions
+# imports used inside value read/write functions
 
 from extensions import format as fmt
 from os import listdir
 import importlib
 import extensions
-extension_path = "extensions." 
+
+extension_path = "extensions."
 for extension in listdir("extensions"):
     extension = extension.split(".")[0]
-    module = importlib.import_module(extension_path+extension)
-    setattr(module,extension,extensions) 
+    module = importlib.import_module(extension_path + extension)
+    setattr(module, extension, extensions)
 
 
 @dataclass
@@ -31,13 +32,12 @@ class Characteristics:
     can_subscribe: bool = False
     can_write: bool = False
     wait_write_response: bool = False
-    
+
     _parent_link: "Service" = None
     _char_obj: bleak.BleakGATTCharacteristic = None
     value: Any = None
     is_updated: bool = False
     is_changed: bool = False
-
 
     def __init__(self, data: dict, name: str):
         required_fields = ["uuid"]
@@ -46,7 +46,7 @@ class Characteristics:
                 raise ValueError(
                     f"Missing required field '{field}' in characteristic definition"
                 )
-                
+
         scope = {
             **globals(),
             "self": self,
@@ -54,25 +54,31 @@ class Characteristics:
             "extensions": extensions,
             "__name__": __name__,
         }
-        
 
         if "writeAs" in data.keys():
-            write_func_text = data['writeAs']
-            write_func_args = [x.strip() for x in write_func_text.split(":")[0].split(",")]
-            write_func_body = write_func_text.split(":",1)[1]
-            
+            write_func_text = data["writeAs"]
+            write_func_args = [
+                x.strip() for x in write_func_text.split(":")[0].split(",")
+            ]
+            write_func_body = write_func_text.split(":", 1)[1]
+
             if "await" in write_func_text:
-                
+
                 asyncFunc = f"""
                 async def _write_as({', '.join(write_func_args)}):
                     return {write_func_body}
                 """
                 asyncFunc = textwrap.dedent(asyncFunc)
-                exec(asyncFunc, scope,scope)
-                write_as_func = scope['_write_as']
-                
+                exec(asyncFunc, scope, scope)
+                write_as_func = scope["_write_as"]
+
                 async def write_as(x):
-                    call_args = dict({arg_name:{**locals(),**scope}[arg_name] for arg_name in write_func_args})
+                    call_args = dict(
+                        {
+                            arg_name: {**locals(), **scope}[arg_name]
+                            for arg_name in write_func_args
+                        }
+                    )
                     try:
                         if len(write_func_args) == 1:
                             call_args[write_func_args[0]] = x
@@ -81,16 +87,22 @@ class Characteristics:
                         raise RuntimeError(
                             f"Error occurred while executing write_as coro: {e}"
                         )
+
             else:
                 try:
-                    write_as_func = eval(f"lambda {write_func_text}",scope, scope)
+                    write_as_func = eval(f"lambda {write_func_text}", scope, scope)
                 except:
                     raise ValueError(
                         f"Failed to evaluate writeAs function: {write_func_text}"
                     )
 
                 async def write_as(x):
-                    call_args = dict({arg_name:{**locals(),**scope}[arg_name] for arg_name in write_func_args})
+                    call_args = dict(
+                        {
+                            arg_name: {**locals(), **scope}[arg_name]
+                            for arg_name in write_func_args
+                        }
+                    )
                     try:
                         if len(write_func_args) == 1:
                             call_args[write_func_args[0]] = x
@@ -99,25 +111,33 @@ class Characteristics:
                         raise RuntimeError(
                             f"Error occurred while executing write_as coro: {e}"
                         )
+
             self.write_as = write_as
 
         if "readAs" in data.keys():
-            read_func_text = data['readAs']
-            read_func_args = [x.strip() for x in read_func_text.split(":")[0].split(",")]
-            read_func_body = read_func_text.split(":",1)[1]
-            
+            read_func_text = data["readAs"]
+            read_func_args = [
+                x.strip() for x in read_func_text.split(":")[0].split(",")
+            ]
+            read_func_body = read_func_text.split(":", 1)[1]
+
             if "await" in read_func_text:
-                
+
                 asyncFunc = f"""
                 async def _read_as({', '.join(read_func_args)}):
                     return {read_func_body}
                 """
                 asyncFunc = textwrap.dedent(asyncFunc)
-                exec(asyncFunc, scope,scope)
-                read_as_func = scope['_read_as']
-                
+                exec(asyncFunc, scope, scope)
+                read_as_func = scope["_read_as"]
+
                 async def write_as(x):
-                    call_args = dict({arg_name:{**locals(),**scope}[arg_name] for arg_name in read_func_args})
+                    call_args = dict(
+                        {
+                            arg_name: {**locals(), **scope}[arg_name]
+                            for arg_name in read_func_args
+                        }
+                    )
                     try:
                         if len(read_func_args) == 1:
                             call_args[read_func_args[0]] = x
@@ -126,16 +146,22 @@ class Characteristics:
                         raise RuntimeError(
                             f"Error occurred while executing write_as coro: {e}"
                         )
+
             else:
                 try:
-                    read_as_func = eval(f"lambda {read_func_text}",scope, scope)
+                    read_as_func = eval(f"lambda {read_func_text}", scope, scope)
                 except:
                     raise ValueError(
                         f"Failed to evaluate readAs function: {read_func_text}"
                     )
 
                 async def read_as(x):
-                    call_args = dict({arg_name:{**locals(),**scope}[arg_name] for arg_name in read_func_args})
+                    call_args = dict(
+                        {
+                            arg_name: {**locals(), **scope}[arg_name]
+                            for arg_name in read_func_args
+                        }
+                    )
                     try:
                         if len(read_func_args) == 1:
                             call_args[read_func_args[0]] = x
@@ -144,38 +170,44 @@ class Characteristics:
                         raise RuntimeError(
                             f"Error occurred while executing write_as coro: {e}"
                         )
+
             self.read_as = read_as
-    
-        self.name=name
-        self.uuid=data["uuid"]
-        self.can_read=self.read_as is not None
-        self.can_write=self.write_as is not None
-        self.can_subscribe=data.get("subscribe", False)
-        self.wait_write_response=data.get("wait_write_response", False)
-    
-        
+
+        self.name = name
+        self.uuid = data["uuid"]
+        self.can_read = self.read_as is not None
+        self.can_write = self.write_as is not None
+        self.can_subscribe = data.get("subscribe", False)
+        self.wait_write_response = data.get("wait_write_response", False)
+
     async def read(self):
         if not self.can_read:
-            raise RuntimeError(f"Config is forbidding  read to characteristic {self.name})")
-            
+            raise RuntimeError(
+                f"Config is forbidding  read to characteristic {self.name})"
+            )
+
         if not "read" in self._char_obj.properties:
-            self.logger.warning(f"Characteristic {self.name} does not support read operation.")
+            self.logger.warning(
+                f"Characteristic {self.name} does not support read operation."
+            )
             return
-        
+
         try:
-            value = await self._parent_link._parent_link.ble_client.read_gatt_char(self._char_obj)
+            value = await self._parent_link._parent_link.ble_client.read_gatt_char(
+                self._char_obj
+            )
         except:
             # lost connection to device
             self.is_connected = False
             return
         await self.load_value(value)
-        
+
         return self.value
 
-    async def load_value(self,data):
+    async def load_value(self, data):
         retValue = None
         try:
-           retValue = await self.read_as(data)
+            retValue = await self.read_as(data)
 
         except Exception as e:
             # failed to load value, probably wrong type
@@ -185,21 +217,28 @@ class Characteristics:
         self.is_updated = True
         self.is_changed = self.value != retValue
         self.value = retValue
-        
+
         return self.value
-        
+
     async def write(self, value):
         if not self.can_write:
-            raise RuntimeError(f"Config is forbidding  write to characteristic {self.name})")
-        
+            raise RuntimeError(
+                f"Config is forbidding  write to characteristic {self.name})"
+            )
+
         if self.write_as is not None:
             value = bytes(await self.write_as(value))
-            
+
         if not "write" in self._char_obj.properties:
-            raise PermissionError(f"Can't write to characteristic {self.name} (write not allowed)")
-    
-        await self._parent_link._parent_link.ble_client.write_gatt_char(self._char_obj,value,self.wait_write_response)    
-        
+            raise PermissionError(
+                f"Can't write to characteristic {self.name} (write not allowed)"
+            )
+
+        await self._parent_link._parent_link.ble_client.write_gatt_char(
+            self._char_obj, value, self.wait_write_response
+        )
+
+
 @dataclass
 class Service:
     name: str
@@ -231,7 +270,7 @@ class Service:
 @dataclass
 class NotificationMessage:
     topic: str
-    message:  str | list | dict | int | float
+    message: str | list | dict | int | float
 
 
 class BleDevice:
@@ -363,7 +402,7 @@ class BleDevice:
                                     self.logger.warning(
                                         f"Failed to set notify for characteristic {char_name} in service {service_name} for device {self.name}"
                                     )
-                                    
+
                 self.is_connected = self.ble_client.is_connected
                 if self.is_connected:
                     self.device_connect_callback()
@@ -377,41 +416,45 @@ class BleDevice:
             await self.check_connection()
             await self.read_values()
             await asyncio.sleep(self.update_interval)
-            
+
     async def read_values(self):
         for service in self.services.values():
             for char in service.characteristics.values():
-                await char.read()  
-
-       
+                await char.read()
 
 
 if __name__ == "__main__":
+
     class Devices:
-        def __init__(self, config:dict):
-            for name,deviceConfig in config.items():
-                device = BleDevice(deviceConfig,name)
+        def __init__(self, config: dict):
+            for name, deviceConfig in config.items():
+                device = BleDevice(deviceConfig, name)
                 # asyncio.run_coroutine_threadsafe(device.read_values_loop(), asyncio.get_event_loop())
-                setattr(self,name,device)
-    
+                setattr(self, name, device)
+
             # Example config, replace with your actual config
             config = {}
-            
-    with open("./config.json","r") as F:
-        config= json.load(F)["devices"]
+
+    with open("./config.json", "r") as F:
+        config = json.load(F)["devices"]
 
     devices = Devices(config)
-    
+
     loop = asyncio.get_event_loop()
-    pending = [device.read_values_loop() for device in devices.__dict__.values() if isinstance(device, BleDevice)]
+    pending = [
+        device.read_values_loop()
+        for device in devices.__dict__.values()
+        if isinstance(device, BleDevice)
+    ]
+
     async def testWrtite():
         await asyncio.sleep(10)
         print("Sending!")
         thermostat = devices.Thermostat1
         thermostat: BleDevice
-        await thermostat.services["Thermostat"].characteristics["temperatureSetPoint"].write(15)
+        await thermostat.services["Thermostat"].characteristics[
+            "temperatureSetPoint"
+        ].write(15)
+
     pending.append(testWrtite())
     loop.run_until_complete(asyncio.gather(*pending))
-        
-
-
