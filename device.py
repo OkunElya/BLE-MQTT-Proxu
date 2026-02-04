@@ -185,7 +185,10 @@ class Characteristics:
             raise RuntimeError(
                 f"Config is forbidding  read to characteristic {self.name})"
             )
-
+        if self._char_obj is None:
+            self.logger.warning(f"Characteristic object for {self.name} is not initialized (device not connected yet).")
+            return
+        
         if not "read" in self._char_obj.properties:
             self.logger.warning(
                 f"Characteristic {self.name} does not support read operation."
@@ -248,6 +251,11 @@ class Service:
     _service_obj: bleak.BleakGATTServiceCollection = None
     _parent_link: "BleDevice" = None
 
+    def __getattr__(self, name) -> Characteristics:
+        if name in self.characteristics.keys():
+            return self.characteristics[name]
+        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
+    
     @classmethod
     def from_config(cls, data: dict, name: str):
         required_fields = ["uuid", "characteristics"]
@@ -337,6 +345,11 @@ class BleDevice:
             winrt=dict(use_cached_services=False),
         )
 
+    def __getattr__(self, name) -> Service:
+        if name in self.services.keys():
+            return self.services[name]
+        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
+    
     def send_mqtt_message(self, topic: str, message: str):
         self.logger.info(f"Sending MQTT message to topic '{topic}': {message}")
         ...  # TODO
@@ -452,9 +465,7 @@ if __name__ == "__main__":
         print("Sending!")
         thermostat = devices.Thermostat1
         thermostat: BleDevice
-        await thermostat.services["Thermostat"].characteristics[
-            "temperatureSetPoint"
-        ].write(15)
+        await thermostat.Thermostat.temperatureSetPoint.write(15)
 
     pending.append(testWrtite())
     loop.run_until_complete(asyncio.gather(*pending))
