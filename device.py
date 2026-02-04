@@ -38,6 +38,26 @@ class Characteristics:
     value: Any = None
     is_updated: bool = False
     is_changed: bool = False
+    
+    
+    on_update_callbacks: list = []
+    on_change_callbacks: list = []
+
+    def add_on_update_callback(self, coro):
+        self.on_update_callbacks.append(coro)
+
+    async def run_on_update_callbacks(self):
+        if self.on_update_callbacks:
+            for coro in self.on_update_callbacks:
+                await coro(self)
+
+    def add_on_change_callback(self, coro):
+        self.on_change_callbacks.append(coro)
+
+    async def run_on_change_callbacks(self):
+        if self.on_change_callbacks:
+            for coro in self.on_change_callbacks:
+                await coro(self)
 
     def __init__(self, data: dict, name: str):
         self.logger = logging.getLogger()
@@ -222,6 +242,10 @@ class Characteristics:
             )
         self.is_updated = True
         self.is_changed = self.value != retValue
+        await self.run_on_update_callbacks()
+        if self.is_changed:
+            await self.run_on_change_callbacks()
+        
         self.value = retValue
 
         return self.value
