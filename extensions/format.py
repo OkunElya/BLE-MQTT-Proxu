@@ -20,7 +20,7 @@ class pack:
     @staticmethod
     def byte(val):
         val=min(255,max(0,int(val)))
-        return bytes(val)
+        return bytes([val])
 
 class unpack:
     @staticmethod
