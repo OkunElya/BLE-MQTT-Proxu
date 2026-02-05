@@ -136,7 +136,7 @@ class Characteristics:
                         return write_as_func(**call_args)
                     except Exception as e:
                         raise RuntimeError(
-                            f"Error occurred while executing write_as coro: {e}"
+                            f"Error occurred while executing write_as: {e}"
                         )
 
             self.write_as = write_as
@@ -158,7 +158,7 @@ class Characteristics:
                 exec(asyncFunc, scope, scope)
                 read_as_func = scope["_read_as"]
 
-                async def write_as(x):
+                async def read_as(x):
                     call_args = dict(
                         {
                             arg_name: {**locals(), **scope}[arg_name]
@@ -171,7 +171,7 @@ class Characteristics:
                         return await read_as_func(**call_args)
                     except Exception as e:
                         raise RuntimeError(
-                            f"Error occurred while executing write_as coro: {e}"
+                            f"Error occurred while executing read as coro: {e}"
                         )
 
             else:
@@ -195,7 +195,7 @@ class Characteristics:
                         return read_as_func(**call_args)
                     except Exception as e:
                         raise RuntimeError(
-                            f"Error occurred while executing write_as coro: {e}"
+                            f"Error occurred while executing read_as: {e}"
                         )
 
             self.read_as = read_as

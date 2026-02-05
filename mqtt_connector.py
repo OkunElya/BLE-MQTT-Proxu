@@ -365,12 +365,12 @@ class InputTopic:
         if not isinstance(config, dict):
             raise TypeError("Config for inputTopic must be a dict")
         self.action_list = []
-        if not "onRecieve" in config:
-            raise ValueError("add onRecieve key to the subscriben topic config")
-        if not isinstance(config["onRecieve"], list):
-            raise TypeError("'onRecieve' must be a list")
+        if not "onReceive" in config:
+            raise ValueError("add onReceive key to the subscriben topic config")
+        if not isinstance(config["onReceive"], list):
+            raise TypeError("'onReceive' must be a list")
 
-        for action in config["onRecieve"]:
+        for action in config["onReceive"]:
             self.action_list.append(InputTopicAction(action, self, self.local_context))
 
     async def run_actions(self, x):

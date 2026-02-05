@@ -237,17 +237,17 @@
             },
             "toSubscribeTo": {
                 "devices/Thermostat1/controls/temperatureSetPoint": {
-                    "onRecieve": [
+                    "onReceive": [
                         "x : await Devices.Thermostat1.Thermostat.temperatureSetPoint.write(float(x))"
                     ]
                 },
                 "devices/Thermostat1/controls/mode": {
-                    "onRecieve": [
+                    "onReceive": [
                         "x : await Devices.Thermostat1.Thermostat.mode.write(int(['heat','off'].index(x)))"
                     ]
                 },
                 "devices/Thermostat1/controls/externalTemperature": {
-                    "onRecieve": [
+                    "onReceive": [
                         "x : await Devices.Thermostat1.Thermostat.externalTemperature.write(float(x))"
                     ]
                 }
