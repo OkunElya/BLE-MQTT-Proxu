@@ -522,18 +522,18 @@ class DeviceCollection:
 if __name__ == "__main__":
     with open("./config.json", "r") as F:
         config = json.load(F)["devices"]
-
-    devices = DeviceCollection(config)
+    logger = logging.getLogger()
+    devices = DeviceCollection(config,logger)
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
     async def testWrtite():
-        await asyncio.sleep(10)
+        await asyncio.sleep(5)
         print("Sending!")
         thermostat = devices.Thermostat1
         thermostat: BleDevice
-        await thermostat.Thermostat.temperatureSetPoint.write(15)
+        await thermostat.Thermostat.mode.write(0)
 
     pending = DeviceCollection.devices_corutines
     pending.append(testWrtite())

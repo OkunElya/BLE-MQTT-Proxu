@@ -242,7 +242,7 @@ class InputTopicAction:
     ):
         self.action_str = action
         self._parent_link = _parent_link
-        self.local_context = list({x: w for x, w in local_context.items()})
+        self.local_context = dict({x: w for x, w in local_context.items()})
         write_func_body = self.action_str.split(":", 1)[1]
         write_func_args = "x"
         if "await" in self.action_str:
@@ -253,7 +253,7 @@ class InputTopicAction:
             """
             asyncFunc = textwrap.dedent(asyncFunc)
             exec(asyncFunc, self.local_context, self.local_context)
-            action_func = local_context["_action"]
+            action_func = self.local_context["_action"]
 
             async def do_action(x):
                 try:
@@ -266,7 +266,7 @@ class InputTopicAction:
         else:
             try:
                 action_func = eval(
-                    f"lambda {self.action_str}", local_context, local_context
+                    f"lambda {self.action_str}", self.local_context, self.local_context
                 )
             except:
                 raise ValueError(
@@ -292,32 +292,95 @@ class InputTopicAction:
 
 
 class InputTopic:
+    action_list: list[InputTopicAction]
+    name: str
+
+    _parent_link: "InputTopicCollection"
+
+    def __init__(
+        self,
+        name: str,
+        config: dict[str, Any],
+        client: aiomqtt.Client,
+        local_context: dict[str, Any],
+        _parent_link: "InputTopicCollection",
+        logger: logging.Logger,
+    ):
+        self.name = name
+        self.logger = logger
+        self.local_context = local_context
+        self.client = client
+        self._parent_link = _parent_link
+        if not isinstance(config, dict):
+            raise TypeError("Config for inputTopic must be a dict")
+        self.action_list = []
+        if not "onRecieve" in config:
+            raise ValueError("add onRecieve key to the subscriben topic config")
+        if not isinstance(config["onRecieve"], list):
+            raise TypeError("'onRecieve' must be a list")
+
+        for action in config["onRecieve"]:
+            self.action_list.append(InputTopicAction(action, self, self.local_context))
+
+    async def run_actions(self, x):
+        return await asyncio.gather(
+            *(action.run_action(x) for action in self.action_list)
+        )
+
+    async def subscribe(self):
+        await self.client.subscribe(self.name)
+
+
+class InputTopicCollection:
     def __init__(
         self,
         config: dict[str, Any],
-        name: str,
         client: aiomqtt.Client,
         local_context: dict[str, Any],
         logger: logging.Logger,
     ):
+        self.config = config
         self.logger = logger
         self.local_context = local_context
         self.client = client
-        if not isinstance(config, dict):
-            raise TypeError("Config for inputTopic must be a dict")
+
+        self.topics = {}
+
+        for name, actons_config in self.config.items():
+            self.topics[name] = InputTopic(
+                name, actons_config, self.client, self.local_context, self, self.logger
+            )
+
+    async def run_subcribe(self):
+        await asyncio.gather(*(topic.subscribe() for topic in self.topics.values()))
+
+    async def run_routing(self):
+        async for message in self.client.messages:
+            topic = self.topics.get(message.topic.value)
+            if topic:
+                payload = (
+                    message.payload.decode()
+                    if hasattr(message.payload, "decode")
+                    else message.payload
+                )
+                await topic.run_actions(payload)
+            else:
+                self.logger.warning(
+                    f"Received message for unknown topic: {message.topic}"
+                )
 
 
 if __name__ == "__main__":
     from device import DeviceCollection
+    logger = logging.getLogger()
 
     with open("./config.json", "r") as F:
         device_config = json.load(F)["devices"]
-    Devices = DeviceCollection(device_config)
+    Devices = DeviceCollection(device_config,logger)
     with open("config.json") as F:
         mqtt_config = json.load(F)["mqtt"]
 
     context = {}
-    logger = logging.getLogger()
     client_id = f"BLE proxy-{''.join(random.choices('abcdefghijklmnopqrstuvwxyz0123456789', k=4))}"
     server_address = mqtt_config.get("serverAddress", None)
 
@@ -340,6 +403,8 @@ if __name__ == "__main__":
             password=password,
             identifier=client_id,
         ) as client:
+            Devices.set_send_mqtt_message_handle(client.publish)
+            
             topic_list = []
             all_tasks = []
             for topic_name, topic_config in mqtt_config["topics"]["toSendTo"].items():
@@ -349,6 +414,8 @@ if __name__ == "__main__":
                 topic_list.append(topic_obj)
                 all_tasks = topic_obj.get_corutines()
             all_tasks += DeviceCollection.devices_corutines
+            topics = InputTopicCollection(mqtt_config["topics"]["toSubscribeTo"],client,{**locals(), **globals()},logger)
+            all_tasks += [topics.run_routing(),topics.run_subcribe()]
             await asyncio.gather(*(task for task in all_tasks))
 
     loop = asyncio.new_event_loop()
