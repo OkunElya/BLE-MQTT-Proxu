@@ -1,12 +1,12 @@
 import asyncio
 import aiomqtt
 import json
-import random
 import time
 from typing import Any
 from typing import Optional, Callable
 import logging
 import textwrap
+from device import Characteristics
 
 
 class TopicPayload:
@@ -47,6 +47,7 @@ class TopicTrigger:
     condition: Optional[Callable[[], bool]]
     last_interval_trigger: float
     last_delay_trigger: float
+    update_char_list: list[Characteristics] = None
 
     _parent_link: "TopicTriggerCollection"
 
@@ -113,10 +114,22 @@ class TopicTrigger:
                     )
                 self.last_delay_trigger = time.monotonic() - float(value)
                 self.delay = float(value)
+            if key == "onUpdate":
+                if not isinstance(value, list):
+                    raise TypeError(f"'onUpdate' must be a list, got {type(value).__name__}")
+                self.update_char_list = []
+                for char_address in value:
+                    try:
+                        char: Characteristics = eval(char_address,self.local_context,self.local_context)
+                    except Exception as e:
+                        raise ValueError(f"Failed to eval char_address '{char_address}' in onUpdate: {e}")
+                    self.update_char_list.append(char)
+                    char.add_on_update_callback(self.query_loop_tick)
+                    
         self.get_query_interval()
 
     async def check(self):
-        # delay is first priority, interval second and executable condition is last
+        # delay is first priority, interval second, onupdate|onchange checks thirds and executable condition is last
         if self.delay is not None:
             now = time.monotonic()
             if now - self.last_delay_trigger < self.delay:
@@ -129,12 +142,19 @@ class TopicTrigger:
                 return False
             self.last_interval_trigger = now
 
+        if self.update_char_list is not None:
+            out = all([x.is_updated for x in self.update_char_list])
+            if not out:
+                return False
+        
         if self.condition is not None:
             try:
-                return bool(self.condition())
+                ret =  bool(self.condition())
             except Exception as e:
                 raise ValueError(f"Failed to execute toEval: {e}")
-
+            
+            if not ret:
+                return False
         return True
 
     def get_query_interval(self) -> float:
@@ -147,23 +167,26 @@ class TopicTrigger:
             else:
                 min_interval = min(min_interval, self.interval)
 
-        if min_interval is None:
+        if min_interval is None and self.update_char_list is None:
             min_interval = 1.0  # default to sensible delay
         return min_interval
 
+    async def query_loop_tick(self, characteristics:Characteristics = None):
+        try:
+            if await self.check():
+                try:
+                    await self._parent_link._parent_link.send()
+                except Exception as e:
+                    self.logger.error(
+                        f"Failed to post message: {e} | Trigger config: {self.config}"
+                    )
+        except Exception as e:
+            self.logger.error(f"Failed to check trigger: {e}")
+    
     async def query_loop(self):
         interval = self.get_query_interval()
         while interval is not None:
-            try:
-                if await self.check():
-                    try:
-                        await self._parent_link._parent_link.send()
-                    except Exception as e:
-                        self.logger.error(
-                            f"Failed to post message: {e} | Trigger config: {self.config}"
-                        )
-            except Exception as e:
-                self.logger.error(f"Failed to check trigger: {e}")
+            await self.query_loop_tick()
             await asyncio.sleep(interval)
 
 
