@@ -22,7 +22,6 @@ for extension in listdir("extensions"):
     setattr(module, extension, extensions)
 
 
-@dataclass
 class Characteristics:
     name: str
     uuid: str
@@ -38,8 +37,15 @@ class Characteristics:
     value: Any = None
     is_updated: bool = False
     is_changed: bool = False
-    
-    
+
+    def get_value(self):
+        self.is_changed = False
+        self.is_updated = False
+        return self.value
+
+    def getValue(self):
+        return self.get_value()
+
     on_update_callbacks: list = []
     on_change_callbacks: list = []
 
@@ -245,7 +251,7 @@ class Characteristics:
         await self.run_on_update_callbacks()
         if self.is_changed:
             await self.run_on_change_callbacks()
-        
+
         self.value = retValue
 
         return self.value
