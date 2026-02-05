@@ -1,12 +1,28 @@
-### Bluetooth Low Energy to MQTT PROXY
-This project constains little python script that uses bleak and paho.matt to forward bluetooth data from devices like smart thermometers and more to uor mqtt server with specified data format
-For now it supports only one way proxying (BLE -> MQTT) but i might add support for another direction in not so distant future
-The configuration is pretty flexible which also could be an attack vector (don't use someone's config without readig it thoroughly)
+# BLE-MQTT Proxy
 
-## Running it
-1. attach bluetooth modem
-2. install bleak and paho-mqtt
-3. create configuration.json in the same dirrectory as the script. (use config example as the  reference)
-4. run main.py
+Bridges Bluetooth Low Energy devices to MQTT. Supports bidirectional communication: read BLE characteristics -> publish to MQTT, subscribe to MQTT <- write to BLE.
 
-There might be some issues with long term connections on the linux platfoem (also on the windows, but i've not tested it there) (rebooting won't help, so `sudo shutdown now` it unplug frompower and wait 10 sec, if your modem is unplagable , just repluging it or tinkering with the usp power state might just fix it for you)
+## Features
+- Flexible JSON configuration with dynamic data transformations
+- Automatic reconnection handling
+- Configurable triggers (interval, conditions, on-update)
+- Extensible via Python modules (`extensions/`)
+
+## Quick Start
+
+```bash
+pip install bleak aiomqtt
+cp config_example.json config.json
+# Edit config.json with your devices and MQTT broker
+python main.py
+```
+
+## Configuration
+
+See `config_example.json` and `DOCUMENTATION.md` for detailed configuration reference.
+
+**Security Note:** Config allows arbitrary Python code execution. Only use trusted configurations.
+
+## Known Issues
+
+Long-term BLE stability issues on Linux may require power cycling the Bluetooth adapter. Please create an issue or contribute if you know how to fix this
