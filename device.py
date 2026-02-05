@@ -4,7 +4,7 @@ import bleak
 import json
 import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable
 import textwrap
 
 
@@ -65,8 +65,8 @@ class Characteristics:
             for coro in self.on_change_callbacks:
                 await coro(self)
 
-    def __init__(self, data: dict, name: str):
-        self.logger = logging.getLogger()
+    def __init__(self, data: dict, name: str, logger: logging.Logger):
+        self.logger = logger
         required_fields = ["uuid"]
         for field in required_fields:
             if field not in data:
@@ -275,7 +275,6 @@ class Characteristics:
         )
 
 
-@dataclass
 class Service:
     name: str
     uuid: str
@@ -291,8 +290,7 @@ class Service:
             f"'{self.__class__.__name__}' object has no attribute '{name}'"
         )
 
-    @classmethod
-    def from_config(cls, data: dict, name: str):
+    def __init__(self, data: dict, name: str, logger: logging.Logger):
         required_fields = ["uuid", "characteristics"]
         for field in required_fields:
             if field not in data:
@@ -300,14 +298,14 @@ class Service:
                     f"Missing required field '{field}' in service definition"
                 )
 
-        service = cls(name=name, uuid=data["uuid"], characteristics={})
+        self.name = name
+        self.uuid = data["uuid"]
+        self.characteristics = {}
 
         for char_name, char_data in data["characteristics"].items():
-            char = Characteristics(char_data, char_name)
-            char._parent_link = service
-            service.characteristics[char_name] = char
-
-        return service
+            char = Characteristics(char_data, char_name, logger)
+            char._parent_link = self
+            self.characteristics[char_name] = char
 
 
 @dataclass
@@ -330,9 +328,17 @@ class BleDevice:
     services: dict[str, Service]
     secret_key: bytes | None
 
+    _parent_link = "DeviceCollection"
+
     def __init__(
-        self, data: dict, name: str, logger: logging.Logger = logging.getLogger()
+        self,
+        data: dict,
+        name: str,
+        _parent_link: "DeviceCollection",
+        logger: logging.Logger,
     ):
+        self.logger = logger
+        self._parent_link = _parent_link
         required_fields = ["address", "services"]
         for field in required_fields:
             if field not in data:
@@ -365,7 +371,7 @@ class BleDevice:
         self.services = {}
 
         for svc_name, svc_data in data["services"].items():
-            svc = Service.from_config(svc_data, svc_name)
+            svc = Service(svc_data, svc_name, self.logger)
             svc._parent_link = self
             self.services[svc_name] = svc
 
@@ -387,11 +393,10 @@ class BleDevice:
             f"'{self.__class__.__name__}' object has no attribute '{name}'"
         )
 
-    def send_mqtt_message(self, topic: str, message: str):
-        self.logger.info(f"Sending MQTT message to topic '{topic}': {message}")
-        ...  # TODO
+    async def send_mqtt_message(self, topic: str, message: str):
+        await self._parent_link.send_mqtt_message(topic, message)
 
-    def device_connect_callback(self):
+    async def device_connect_callback(self):
         self.logger.info(f"restored connection to {self.name}")
         self.is_connected = self.ble_client.is_connected
 
@@ -399,15 +404,19 @@ class BleDevice:
             self.has_connected_previously = True
             return
         for msg in self.connect_notification_messages:
-            self.send_mqtt_message(msg.topic, json.dumps(msg.message))
+            await self.send_mqtt_message(msg.topic, json.dumps(msg.message))
         pass
 
     def device_disconnect_callback(self, client):
         self.logger.info(f"lost connection to {self.name}")
 
         self.is_connected = self.ble_client.is_connected
-        for msg in self.disconnect_notification_messages:
-            self.send_mqtt_message(msg.topic, json.dumps(msg.message))
+
+        async def notify_disconnect():
+            for msg in self.disconnect_notification_messages:
+                await self.send_mqtt_message(msg.topic, json.dumps(msg.message))
+
+        asyncio.create_task(notify_disconnect())
         pass
 
     async def check_connection(self):
@@ -455,7 +464,7 @@ class BleDevice:
 
                 self.is_connected = self.ble_client.is_connected
                 if self.is_connected:
-                    self.device_connect_callback()
+                    await self.device_connect_callback()
                     break
             except:
                 self.is_connected = self.ble_client.is_connected
@@ -473,19 +482,26 @@ class BleDevice:
                 try:
                     await char.read()
                 except Exception as e:
-                    self.logger.error(f"Error reading characteristic '{char.name}' in service '{service.name}' of device '{self.name}': {e}")
+                    self.logger.error(
+                        f"Error reading characteristic '{char.name}' in service '{service.name}' of device '{self.name}': {e}"
+                    )
 
 
 class DeviceCollection:
     devices: dict[str, BleDevice] = {}
-
     devices_corutines: list = []
 
-    def __init__(self, config: dict):
+    send_mqtt_message_handle: Callable[[str, str], Any] = None
+
+    def __init__(self, config: dict, logger: logging.Logger):
+        self.logger = logger
         for device_name, device_config in config.items():
-            device = BleDevice(device_config, device_name)
+            device = BleDevice(device_config, device_name, self, self.logger)
             self.devices[device_name] = device
             self.devices_corutines.append(device.read_values_loop())
+
+    def set_send_mqtt_message_handle(self, send_mqtt_message_handle):
+        self.send_mqtt_message_handle = send_mqtt_message_handle
 
     def __getattr__(self, name) -> BleDevice:
         if name in self.devices.keys():
@@ -493,6 +509,14 @@ class DeviceCollection:
         raise AttributeError(
             f"'{self.__class__.__name__}' object has no attribute '{name}'"
         )
+
+    async def send_mqtt_message(self, topic: str, message: str):
+        if self.send_mqtt_message_handle is not None:
+            await self.send_mqtt_message_handle(topic, message)
+        else:
+            self.logger.warn(
+                f"Sending MQTT message to topic failed, uninitialized handle '{topic}': {message}"
+            )
 
 
 if __name__ == "__main__":
