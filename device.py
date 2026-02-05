@@ -470,7 +470,10 @@ class BleDevice:
     async def read_values(self):
         for service in self.services.values():
             for char in service.characteristics.values():
-                await char.read()
+                try:
+                    await char.read()
+                except Exception as e:
+                    self.logger.error(f"Error reading characteristic '{char.name}' in service '{service.name}' of device '{self.name}': {e}")
 
 
 class DeviceCollection:

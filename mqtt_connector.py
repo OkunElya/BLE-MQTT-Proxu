@@ -6,6 +6,7 @@ import time
 from typing import Any
 from typing import Optional, Callable
 import logging
+import textwrap
 
 
 class TopicPayload:
@@ -141,11 +142,14 @@ class TopicTrigger:
     async def query_loop(self):
         interval = self.get_query_interval()
         while interval is not None:
-            if await self.check():
-                try:
-                    await self._parent_link._parent_link.send()
-                except Exception as e:
-                    self.logger.error(f"Failed to post message: {e} | Trigger config: {self.config}")
+            try:
+                if await self.check():
+                    try:
+                        await self._parent_link._parent_link.send()
+                    except Exception as e:
+                        self.logger.error(f"Failed to post message: {e} | Trigger config: {self.config}")
+            except Exception as e:
+                self.logger.error(f"Failed to check trigger: {e}")
             await asyncio.sleep(interval)
 
 
@@ -200,9 +204,67 @@ class OutputTopic:
     def get_corutines(self):
         return self.trigger_collection.trigger_futures_list
     
-    
+
+class InputTopicAction:
+    _parent_link: "InputTopic"
+    def __init__(self,action:str,_parent_link:"InputTopic",local_context:dict [str, Any]):
+        self.action_str = action
+        self._parent_link = _parent_link
+        self.local_context = list({x:w for x,w in local_context.items()})
+        write_func_body = self.action_str.split(":", 1)[1]
+        write_func_args = "x"
+        if "await" in self.action_str:
+
+            asyncFunc = f"""
+            async def _action({', '.join(write_func_args)}):
+                return {write_func_body}
+            """
+            asyncFunc = textwrap.dedent(asyncFunc)
+            exec(asyncFunc, self.local_context, self.local_context)
+            action_func = local_context["_action"]
+
+            async def do_action(x):
+                try:
+                    return await action_func(x)
+                except Exception as e:
+                    raise RuntimeError(
+                        f"Error occurred while executing write coro: {e}"
+                    )
+
+        else:
+            try:
+                action_func = eval(f"lambda {self.action_str}", local_context, local_context)
+            except:
+                raise ValueError(
+                    f"Failed to evaluate writeAs function: {self.action_str}"
+                )
+
+            async def do_action(x):
+                try:
+                    return action_func(x)
+                except Exception as e:
+                    raise RuntimeError(
+                        f"Error occurred while executing write_as coro: {e}"
+                    )
+
+        self.do_acton = do_action
 
 
+    async def run_action(self,x):
+        try:
+            return await self.do_acton(x)
+        except Exception as e:
+            self._parent_link.logger.error(f"Error in InputTopicAction.run_action: {e}")
+            return None
+
+
+class InputTopic:
+    def __init__(self, config:dict[str, Any], name:str,client:aiomqtt.Client, local_context:dict [str, Any], logger:logging.Logger):
+        self.logger = logger
+        self.local_context = local_context
+        self.client = client
+        if not isinstance(config, dict):
+            raise TypeError("Config for inputTopic must be a dict")
         
         
 if __name__ == "__main__":
