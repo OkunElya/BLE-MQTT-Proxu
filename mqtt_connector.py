@@ -10,15 +10,15 @@ import textwrap
 
 
 class TopicPayload:
-    def __init__(self, config,local_context:dict[str, Any]):
+    def __init__(self, config, local_context: dict[str, Any]):
         self.local_context = local_context
         self.config = config
         self.get_populated()
-        
+
     def get_populated(self):
-        return  self.recursive_replace(self.config)
-    
-    def replace_str(self, string:str):
+        return self.recursive_replace(self.config)
+
+    def replace_str(self, string: str):
         try:
             return eval(string, self.local_context, self.local_context)
         except Exception as e:
@@ -40,41 +40,49 @@ class TopicPayload:
         else:
             return config_part
 
+
 class TopicTrigger:
     delay: Optional[float]
     interval: Optional[float]
     condition: Optional[Callable[[], bool]]
     last_interval_trigger: float
     last_delay_trigger: float
-    
+
     _parent_link: "TopicTriggerCollection"
-    
-    
-    def __init__(self, config:dict,local_context:dict[str, Any],parent_link: "TopicTriggerCollection",logger:logging.Logger):
+
+    def __init__(
+        self,
+        config: dict,
+        local_context: dict[str, Any],
+        parent_link: "TopicTriggerCollection",
+        logger: logging.Logger,
+    ):
         self.logger = logger
         self._parent_link = parent_link
         if not isinstance(config, dict):
             raise TypeError("Config for sendOn must be a dict")
         self.config = config
-        
+
         self.local_context = local_context
-        
+
         self.delay = None
         self.interval = None
         self.condition = None
         self.last_interval_trigger = 0
         self.last_delay_trigger = 0
-        
+
         self.prepare()
-    
+
     def prepare(self):
         for key, value in self.config.items():
             if key == "equation":
-                #try to eval 
+                # try to eval
                 # self.config[key] =  self.config[key]
                 try:
-                    
-                    self.condition =lambda : eval(self.config["equation"], self.local_context, self.local_context)
+
+                    self.condition = lambda: eval(
+                        self.config["equation"], self.local_context, self.local_context
+                    )
                     self.condition()
                 except Exception as e:
                     raise ValueError(f"Failed to eval '{self.config[key]}': {e}")
@@ -82,29 +90,33 @@ class TopicTrigger:
                 try:
                     result = self.condition()
                     if not isinstance(result, bool):
-                        raise ValueError("equation condition must return a boolean value")
+                        raise ValueError(
+                            "equation condition must return a boolean value"
+                        )
                 except Exception as e:
                     raise ValueError(f"Failed to execute equation condition: {e}")
             if key == "interval":
                 try:
                     float(value)
                 except (TypeError, ValueError):
-                    raise ValueError(f"Interval value '{value}' is not convertible to float")
-                self.last_interval_trigger = time.monotonic() - float(value) 
+                    raise ValueError(
+                        f"Interval value '{value}' is not convertible to float"
+                    )
+                self.last_interval_trigger = time.monotonic() - float(value)
                 self.interval = float(value)
             if key == "delay":
                 try:
                     float(value)
                 except (TypeError, ValueError):
-                    raise ValueError(f"Interval value '{value}' is not convertible to float")
-                self.last_delay_trigger = time.monotonic() - float(value) 
+                    raise ValueError(
+                        f"Interval value '{value}' is not convertible to float"
+                    )
+                self.last_delay_trigger = time.monotonic() - float(value)
                 self.delay = float(value)
         self.get_query_interval()
-        
-        
-                
+
     async def check(self):
-        #delay is first priority, interval second and executable condition is last
+        # delay is first priority, interval second and executable condition is last
         if self.delay is not None:
             now = time.monotonic()
             if now - self.last_delay_trigger < self.delay:
@@ -117,12 +129,12 @@ class TopicTrigger:
                 return False
             self.last_interval_trigger = now
 
-        if  self.condition is not None:
+        if self.condition is not None:
             try:
                 return bool(self.condition())
             except Exception as e:
                 raise ValueError(f"Failed to execute toEval: {e}")
-        
+
         return True
 
     def get_query_interval(self) -> float:
@@ -133,12 +145,12 @@ class TopicTrigger:
             if min_interval is None:
                 min_interval = self.interval
             else:
-                min_interval = min(min_interval,self.interval)
-        
+                min_interval = min(min_interval, self.interval)
+
         if min_interval is None:
-            min_interval = 1.0 #default to sensible delay 
+            min_interval = 1.0  # default to sensible delay
         return min_interval
-    
+
     async def query_loop(self):
         interval = self.get_query_interval()
         while interval is not None:
@@ -147,7 +159,9 @@ class TopicTrigger:
                     try:
                         await self._parent_link._parent_link.send()
                     except Exception as e:
-                        self.logger.error(f"Failed to post message: {e} | Trigger config: {self.config}")
+                        self.logger.error(
+                            f"Failed to post message: {e} | Trigger config: {self.config}"
+                        )
             except Exception as e:
                 self.logger.error(f"Failed to check trigger: {e}")
             await asyncio.sleep(interval)
@@ -159,58 +173,76 @@ class TopicTriggerCollection:
     trigger_futures_list: list[asyncio.Task] = []
 
     _parent_link: "OutputTopic"
-   
-    def __init__(self,config:list,local_context, _parent_link:"OutputTopic",logger:logging.Logger):
+
+    def __init__(
+        self,
+        config: list,
+        local_context,
+        _parent_link: "OutputTopic",
+        logger: logging.Logger,
+    ):
         self.logger = logger
         self._parent_link = _parent_link
         self.config = config
         self.local_context = local_context
-        
+
         if not isinstance(config, list):
             raise TypeError("Config for TopicTriggerCollection must be a list")
 
         for trigger_config in config:
-            trigger = TopicTrigger(trigger_config, local_context,self,self.logger)
+            trigger = TopicTrigger(trigger_config, local_context, self, self.logger)
             self.trigger_list.append(trigger)
             self.trigger_futures_list.append(trigger.query_loop())
-            
+
 
 class OutputTopic:
     name: str
     logger: logging.Logger
     payload: TopicPayload
     trigger_collection: TopicTriggerCollection
-    
-    
-    def __init__(self, config:dict[str, Any], name:str,client:aiomqtt.Client, local_context:dict [str, Any], logger:logging.Logger):
+
+    def __init__(
+        self,
+        config: dict[str, Any],
+        name: str,
+        client: aiomqtt.Client,
+        local_context: dict[str, Any],
+        logger: logging.Logger,
+    ):
         self.logger = logger
         self.local_context = local_context
         self.client = client
-        
+
         if "payload" not in config or "sendOn" not in config:
-            raise KeyError("Both 'payload' and 'sendOn' keys must be present in the config")
+            raise KeyError(
+                "Both 'payload' and 'sendOn' keys must be present in the config"
+            )
         self.config = config
         self.name = name
-        self.payload = TopicPayload(config["payload"],self.local_context)
-        self.trigger_collection = TopicTriggerCollection(config["sendOn"],self.local_context,self,self.logger)
-
+        self.payload = TopicPayload(config["payload"], self.local_context)
+        self.trigger_collection = TopicTriggerCollection(
+            config["sendOn"], self.local_context, self, self.logger
+        )
 
     async def send(self):
         payload = self.payload.get_populated()
         if isinstance(payload, (dict, list)):
             payload = json.dumps(payload)
-        await self.client.publish(self.name,payload)
-        
+        await self.client.publish(self.name, payload)
+
     def get_corutines(self):
         return self.trigger_collection.trigger_futures_list
-    
+
 
 class InputTopicAction:
     _parent_link: "InputTopic"
-    def __init__(self,action:str,_parent_link:"InputTopic",local_context:dict [str, Any]):
+
+    def __init__(
+        self, action: str, _parent_link: "InputTopic", local_context: dict[str, Any]
+    ):
         self.action_str = action
         self._parent_link = _parent_link
-        self.local_context = list({x:w for x,w in local_context.items()})
+        self.local_context = list({x: w for x, w in local_context.items()})
         write_func_body = self.action_str.split(":", 1)[1]
         write_func_args = "x"
         if "await" in self.action_str:
@@ -233,7 +265,9 @@ class InputTopicAction:
 
         else:
             try:
-                action_func = eval(f"lambda {self.action_str}", local_context, local_context)
+                action_func = eval(
+                    f"lambda {self.action_str}", local_context, local_context
+                )
             except:
                 raise ValueError(
                     f"Failed to evaluate writeAs function: {self.action_str}"
@@ -249,8 +283,7 @@ class InputTopicAction:
 
         self.do_acton = do_action
 
-
-    async def run_action(self,x):
+    async def run_action(self, x):
         try:
             return await self.do_acton(x)
         except Exception as e:
@@ -259,23 +292,30 @@ class InputTopicAction:
 
 
 class InputTopic:
-    def __init__(self, config:dict[str, Any], name:str,client:aiomqtt.Client, local_context:dict [str, Any], logger:logging.Logger):
+    def __init__(
+        self,
+        config: dict[str, Any],
+        name: str,
+        client: aiomqtt.Client,
+        local_context: dict[str, Any],
+        logger: logging.Logger,
+    ):
         self.logger = logger
         self.local_context = local_context
         self.client = client
         if not isinstance(config, dict):
             raise TypeError("Config for inputTopic must be a dict")
-        
-        
+
+
 if __name__ == "__main__":
     from device import DeviceCollection
+
     with open("./config.json", "r") as F:
         device_config = json.load(F)["devices"]
     Devices = DeviceCollection(device_config)
     with open("config.json") as F:
         mqtt_config = json.load(F)["mqtt"]
-    
-    
+
     context = {}
     logger = logging.getLogger()
     client_id = f"BLE proxy-{''.join(random.choices('abcdefghijklmnopqrstuvwxyz0123456789', k=4))}"
@@ -291,21 +331,26 @@ if __name__ == "__main__":
 
     username = mqtt_config.get("username", None)
     password = mqtt_config.get("password", None)
-    
-    
+
     async def main():
-        async with aiomqtt.Client(hostname=server_hostname, port=server_port,username=username,password=password,identifier=client_id) as client:
+        async with aiomqtt.Client(
+            hostname=server_hostname,
+            port=server_port,
+            username=username,
+            password=password,
+            identifier=client_id,
+        ) as client:
             topic_list = []
             all_tasks = []
             for topic_name, topic_config in mqtt_config["topics"]["toSendTo"].items():
-                topic_obj = OutputTopic(topic_config,topic_name,client, {**locals(),**globals()},logger)
+                topic_obj = OutputTopic(
+                    topic_config, topic_name, client, {**locals(), **globals()}, logger
+                )
                 topic_list.append(topic_obj)
                 all_tasks = topic_obj.get_corutines()
             all_tasks += DeviceCollection.devices_corutines
             await asyncio.gather(*(task for task in all_tasks))
 
-
-    
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     loop.run_until_complete(asyncio.gather(main()))
