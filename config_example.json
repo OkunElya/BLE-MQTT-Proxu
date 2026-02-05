@@ -1,72 +1,257 @@
 {
-    "devices":{
-        "FC:B4:67:4E:85:1E":{
-            "name":"AQMon1",
-            "notifyOnChangeState":{
-                "notifyOnFirstConnect":false,
-                "connect":{"sensors/airQuality/status/AQMon1":{"connected":true}},
-                "disconnect":{"sensors/airQuality/status/AQMon1":{"connected":false}}
+    "devices": {
+        "Thermostat1": {
+            "address": "AA:BB:CC:DD:EE:FF",
+            "secretKey": "Secret key field is used in HMAC sign",
+            "notifyOnLinkStateChange": {
+                "notifyOnFirstConnect": false,
+                "connectMsg": {
+                    "devices/Thermostat1/status": {
+                        "connected": true
+                    }
+                },
+                "disconnectMsg": {
+                    "devices/Thermostat1/status": {
+                        "connected": false
+                    }
+                }
             },
-            "updateInterval":5,
-            "reconnectInterval":10,
-
-            "services":{
-                "0000181a-0000-1000-8000-00805f9b34fb":{
-                    "name":"EnviromentalSensing",
-                    
-                    "characteristics":{
-                        "00002a6e-0000-1000-8000-00805f9b34fb":{"name":"temperatueSCD","loadAs":"int","format":"x :float(x/100)","subscribe":true},
-                        "00002a6f-0000-1000-8000-00805f9b34fb":{"name":"humidity","loadAs":"int","format":"x :float(x/100)"},
-                        "00002b8c-0000-1000-8000-00805f9b34fb":{"name":"Co2","loadAs":"int","format":"x : x"},
-    
-                        "00002a1f-0000-1000-8000-00805f9b34fb":{"name":"temperatueBMP","loadAs":"int","format":"x :float(x/10)","subscribe":true},
-                        "00002a6d-0000-1000-8000-00805f9b34fb":{"name":"pressure","loadAs":"int","format":"x : int(x)"},
-    
-                        "00002bd5-0000-1000-8000-00805f9b34fb":{"name":"PM1_0","loadAs":"float","format":"x : int(x)","subscribe":true},
-                        "00002bd6-0000-1000-8000-00805f9b34fb":{"name":"PM2_5","loadAs":"float","format":"x : int(x)"},
-                        "00002bd7-0000-1000-8000-00805f9b34fb":{"name":"PM10_0","loadAs":"float","format":"x : int(x)"},
-    
-                        "058d6250-21a7-469d-ab7f-f3fe260388a2":{"name":"N10_0","loadAs":"int","format":"x : int(x)","subscribe":true},
-                        "bc97c96c-072f-4b09-aa01-0deae4eb9a26":{"name":"N5_0","loadAs":"int","format":"x : int(x)"},
-                        "553ff836-97d2-4b6c-93ff-4abf7b00112f":{"name":"N2_5","loadAs":"int","format":"x : int(x)"},
-                        "3402d95f-317c-4915-9efd-f73d13ef9b2c":{"name":"N1_0","loadAs":"int","format":"x : int(x)"},
-                        "517b441e-2d87-41cb-ae81-625ef34c2e49":{"name":"N0_5","loadAs":"int","format":"x : int(x)"},
-                        "b884812d-094f-4c0d-8ff0-f530f5ed7208":{"name":"N0_3","loadAs":"int","format":"x : int(x)"}
+            "updateInterval": 5,
+            "reconnectInterval": 10,
+            "services": {
+                "Thermostat": {
+                    "uuid": "0000181a-0000-1000-8000-00805f9b34fb",
+                    "characteristics": {
+                        "internalTemperature": {
+                            "uuid": "00002a6e-0000-1000-8000-00805f9b34fb",
+                            "readAs": "x : float(fmt.unpack.int16l(x)/100)",
+                            "subscribe": true
+                        },
+                        "internalHumidity": {
+                            "uuid": "00002a6f-0000-1000-8000-00805f9b34fb",
+                            "readAs": "x : float(fmt.unpack.int16l(x)/100)",
+                            "subscribe": true
+                        },
+                        "externalTemperature": {
+                            "uuid": "e4c5e72d-b0b3-4756-88a0-d2f114357ce8",
+                            "readAs": "x : float(fmt.unpack.int16l(x)/100) if len(x) == 2 else None",
+                            "writeAs": "x, self : await extensions.hmac_sign.sign_postfix(self,fmt.pack.int16l(int(x*100)))",
+                            "subscribe": true
+                        },
+                        "temperatureSetPoint": {
+                            "uuid": "bad5972d-b0b3-4756-88a0-d2f114357ce8",
+                            "readAs": "x : float(fmt.unpack.int16l(x)/100)",
+                            "writeAs": "x, self : await extensions.hmac_sign.sign_postfix(self,fmt.pack.int16l(int(x*100)))",
+                            "subscribe": true
+                        },
+                        "mode": {
+                            "uuid": "688a12e0-3dc1-4057-a16a-684b88f45b98",
+                            "readAs": "x : int(fmt.unpack.byte(x))",
+                            "writeAs": "x, self : await extensions.hmac_sign.sign_postfix(self,fmt.pack.byte(int(x)))",
+                            "subscribe": true
+                        },
+                        "heaterState": {
+                            "uuid": "688a12e0-3dc1-4057-a16a-684b88f45b99",
+                            "readAs": "x : bool(fmt.unpack.byte(x))",
+                            "subscribe": true
+                        }
+                    }
+                },
+                "Salt": {
+                    "uuid": "0000181a-0000-1000-8000-00805f9b34fb",
+                    "characteristics": {
+                        "salt": {
+                            "uuid": "8e87024a-52fd-4d54-9891-27b248a6a0d8",
+                            "readAs": "x : bytes(x)",
+                            "subscribe": true
+                        }
+                    }
+                }
+            }
+        },
+        "AQMon1": {
+            "address": "AA:BB:CC:DD:EE:FF",
+            "notifyOnLinkStateChange": {
+                "notifyOnFirstConnect": false,
+                "connectMsg": {
+                    "sensors/airQuality/status/AQMon1": {
+                        "connected": true
+                    }
+                },
+                "disconnectMsg": {
+                    "sensors/airQuality/status/AQMon1": {
+                        "connected": false
+                    }
+                }
+            },
+            "updateInterval": 5,
+            "reconnectInterval": 10,
+            "services": {
+                "EnviromentalSensing": {
+                    "uuid": "0000181a-0000-1000-8000-00805f9b34fb",
+                    "characteristics": {
+                        "temperatueSCD": {
+                            "uuid": "00002a6e-0000-1000-8000-00805f9b34fb",
+                            "readAs": "x : float(fmt.unpack.int32l(x))/100",
+                            "subscribe": true
+                        },
+                        "humidity": {
+                            "uuid": "00002a6f-0000-1000-8000-00805f9b34fb",
+                            "readAs": "x : float(fmt.unpack.int32l(x))/100"
+                        },
+                        "Co2": {
+                            "uuid": "00002b8c-0000-1000-8000-00805f9b34fb",
+                            "readAs": "x : int(fmt.unpack.int16l(x))"
+                        },
+                        "temperatueBMP": {
+                            "uuid": "00002a1f-0000-1000-8000-00805f9b34fb",
+                            "readAs": "x : float(fmt.unpack.int32l(x))/10",
+                            "subscribe": true
+                        },
+                        "pressure": {
+                            "uuid": "00002a6d-0000-1000-8000-00805f9b34fb",
+                            "readAs": "x : int(fmt.unpack.int32l(x))"
+                        },
+                        "PM1_0": {
+                            "uuid": "00002bd5-0000-1000-8000-00805f9b34fb",
+                            "readAs": "x : float(fmt.unpack.float32l(x))",
+                            "subscribe": true
+                        },
+                        "PM2_5": {
+                            "uuid": "00002bd6-0000-1000-8000-00805f9b34fb",
+                            "readAs": "x : float(fmt.unpack.float32l(x))"
+                        },
+                        "PM10_0": {
+                            "uuid": "00002bd7-0000-1000-8000-00805f9b34fb",
+                            "readAs": "x : float(fmt.unpack.float32l(x))"
+                        },
+                        "N10_0": {
+                            "uuid": "058d6250-21a7-469d-ab7f-f3fe260388a2",
+                            "readAs": "x : int(fmt.unpack.int16l(x))",
+                            "subscribe": true
+                        },
+                        "N5_0": {
+                            "uuid": "bc97c96c-072f-4b09-aa01-0deae4eb9a26",
+                            "readAs": "x : int(fmt.unpack.int16l(x))"
+                        },
+                        "N2_5": {
+                            "uuid": "553ff836-97d2-4b6c-93ff-4abf7b00112f",
+                            "readAs": "x : int(fmt.unpack.int16l(x))"
+                        },
+                        "N1_0": {
+                            "uuid": "3402d95f-317c-4915-9efd-f73d13ef9b2c",
+                            "readAs": "x : int(fmt.unpack.int16l(x))"
+                        },
+                        "N0_5": {
+                            "uuid": "517b441e-2d87-41cb-ae81-625ef34c2e49",
+                            "readAs": "x : int(fmt.unpack.int16l(x))"
+                        },
+                        "N0_3": {
+                            "uuid": "b884812d-094f-4c0d-8ff0-f530f5ed7208",
+                            "readAs": "x : int(fmt.unpack.int16l(x))"
+                        }
                     }
                 }
             }
         }
     },
-    "mqtt":{
-        "serverAddress":"mqttServer Adress",
-        "username":"mqtt-login",
-        "password":"matt-password",
-        "topics":{
-            "toSendTo":{
-                "sensors/airQuality/data":{
-                    "checkInterval":1,
-                    "payload":{
-                        "Co2_PPM":"$AQMon1.EnviromentalSensing.Co2&",
-                        "SCD_Temp":"$AQMon1.EnviromentalSensing.temperatueSCD&",
-                        "Humidity":"$AQMon1.EnviromentalSensing.humidity&",
-                        "BMP_Temp":"$AQMon1.EnviromentalSensing.temperatueBMP&",
-                        "Pressure":"$AQMon1.EnviromentalSensing.pressure&",
-                        "PM1_0":"$AQMon1.EnviromentalSensing.PM1_0&",
-                        "PM2_5":"$AQMon1.EnviromentalSensing.PM2_5&",
-                        "PM10_0":"$AQMon1.EnviromentalSensing.PM10_0&",
-                        "N10_0":"$AQMon1.EnviromentalSensing.N10_0&",
-                        "N5_0":"$AQMon1.EnviromentalSensing.N5_0&",
-                        "N2_5":"$AQMon1.EnviromentalSensing.N2_5&",
-                        "N1_0":"$AQMon1.EnviromentalSensing.N1_0&",
-                        "N0_5":"$AQMon1.EnviromentalSensing.N0_5&",
-                        "N0_3":"$AQMon1.EnviromentalSensing.N0_3&"
+    "mqtt": {
+        "serverAddress": "mqtt_server_address with optional port[:1883]",
+        "username": "aboba login",
+        "password": "aboba pass",
+        "topics": {
+            "toSendTo": {
+                "devices/Thermostat1/sensors": {
+                    "payload": {
+                        "'internalTemperature'": "Devices.Thermostat1.Thermostat.internalTemperature.getValue()",
+                        "'internalHumidity'": "Devices.Thermostat1.Thermostat.internalHumidity.getValue()"
                     },
-                    "sendOn":[
-                    {"type":"equation","toEval":"($AQMon1.EnviromentalSensing.Co2.isUpdated& or $AQMon1.EnviromentalSensing.Co2.isChanged& )and $AQMon1.EnviromentalSensing.Co2.data&!=0"}
+                    "sendOn": [
+                        {
+                            "interval": 30,
+                            "equation": "Devices.Thermostat1.Thermostat.internalTemperature.is_updated and Devices.Thermostat1.Thermostat.internalTemperature.value is not None"
+                        }
+                    ]
+                },
+                "devices/Thermostat1/controlInfo": {
+                    "payload": {
+                        "'temperatureSetPoint'": "Devices.Thermostat1.Thermostat.temperatureSetPoint.getValue()",
+                        "'mode'": "['heat', 'off', 'dry'][Devices.Thermostat1.Thermostat.mode.value] if Devices.Thermostat1.Thermostat.mode.getValue() is not None else 'initializing'",
+                        "'heaterState'": "Devices.Thermostat1.Thermostat.heaterState.getValue()"
+                    },
+                    "sendOn": [
+                        {
+                            "equation": "Devices.Thermostat1.Thermostat.mode.is_updated and Devices.Thermostat1.Thermostat.mode.value is not None and Devices.Thermostat1.Thermostat.temperatureSetPoint.value is not None",
+                            "onUpdate": [
+                                "Devices.Thermostat1.Thermostat.mode"
+                            ]
+                        },
+                        {
+                            "equation": "Devices.Thermostat1.Thermostat.mode.is_updated and Devices.Thermostat1.Thermostat.mode.value is not None and Devices.Thermostat1.Thermostat.temperatureSetPoint.value is not None",
+                            "onUpdate": [
+                                "Devices.Thermostat1.Thermostat.temperatureSetPoint"
+                            ]
+                        },
+                        {
+                            "equation": "Devices.Thermostat1.Thermostat.mode.is_updated and Devices.Thermostat1.Thermostat.mode.value is not None and Devices.Thermostat1.Thermostat.temperatureSetPoint.value is not None",
+                            "onUpdate": [
+                                "Devices.Thermostat1.Thermostat.heaterState"
+                            ]
+                        }
+                    ]
+                },
+                "devices/Thermostat1/externalTemperature": {
+                    "payload": "Devices.Thermostat1.Thermostat.externalTemperature.getValue()",
+                    "sendOn": [
+                        {
+                            "equation": "Devices.Thermostat1.Thermostat.externalTemperature.is_updated and Devices.Thermostat1.Thermostat.externalTemperature.value is not None"
+                        }
+                    ]
+                },
+                "sensors/airQuality/data": {
+                    "payload": {
+                        "'Co2_PPM'": "Devices.AQMon1.EnviromentalSensing.Co2.getValue()",
+                        "'SCD_Temp'": "Devices.AQMon1.EnviromentalSensing.temperatueSCD.getValue()",
+                        "'Humidity'": "Devices.AQMon1.EnviromentalSensing.humidity.getValue()",
+                        "'BMP_Temp'": "Devices.AQMon1.EnviromentalSensing.temperatueBMP.getValue()",
+                        "'Pressure'": "Devices.AQMon1.EnviromentalSensing.pressure.getValue()",
+                        "'PM1_0'": "Devices.AQMon1.EnviromentalSensing.PM1_0.getValue()",
+                        "'PM2_5'": "Devices.AQMon1.EnviromentalSensing.PM2_5.getValue()",
+                        "'PM10_0'": "Devices.AQMon1.EnviromentalSensing.PM10_0.getValue()",
+                        "'N10_0'": "Devices.AQMon1.EnviromentalSensing.N10_0.getValue()",
+                        "'N5_0'": "Devices.AQMon1.EnviromentalSensing.N5_0.getValue()",
+                        "'N2_5'": "Devices.AQMon1.EnviromentalSensing.N2_5.getValue()",
+                        "'N1_0'": "Devices.AQMon1.EnviromentalSensing.N1_0.getValue()",
+                        "'N0_5'": "Devices.AQMon1.EnviromentalSensing.N0_5.getValue()",
+                        "'N0_3'": "Devices.AQMon1.EnviromentalSensing.N0_3.getValue()"
+                    },
+                    "sendOn": [
+                        {
+                            "equation": "(Devices.AQMon1.EnviromentalSensing.Co2.is_updated or Devices.AQMon1.EnviromentalSensing.Co2.is_changed) and Devices.AQMon1.EnviromentalSensing.Co2.value is not None",
+                            "onUpdate": [
+                                "Devices.AQMon1.EnviromentalSensing.Co2"
+                            ]
+                        }
+                    ]
+                }
+            },
+            "toSubscribeTo": {
+                "devices/Thermostat1/controls/temperatureSetPoint": {
+                    "onRecieve": [
+                        "x : await Devices.Thermostat1.Thermostat.temperatureSetPoint.write(float(x))"
+                    ]
+                },
+                "devices/Thermostat1/controls/mode": {
+                    "onRecieve": [
+                        "x : await Devices.Thermostat1.Thermostat.mode.write(int(['heat','off'].index(x)))"
+                    ]
+                },
+                "devices/Thermostat1/controls/externalTemperature": {
+                    "onRecieve": [
+                        "x : await Devices.Thermostat1.Thermostat.externalTemperature.write(float(x))"
                     ]
                 }
             }
         }
     }
-
 }
