@@ -170,7 +170,7 @@ class TopicTrigger:
 class TopicTriggerCollection:
     post_message_callback: lambda x: None = None
     trigger_list: list[TopicTrigger] = []
-    trigger_futures_list: list[asyncio.Task] = []
+    trigger_coros_list: list[asyncio.Task] = []
 
     _parent_link: "OutputTopic"
 
@@ -192,7 +192,7 @@ class TopicTriggerCollection:
         for trigger_config in config:
             trigger = TopicTrigger(trigger_config, local_context, self, self.logger)
             self.trigger_list.append(trigger)
-            self.trigger_futures_list.append(trigger.query_loop())
+            self.trigger_coros_list.append(trigger.query_loop())
 
 
 class OutputTopic:
@@ -231,8 +231,36 @@ class OutputTopic:
         await self.client.publish(self.name, payload)
 
     def get_corutines(self):
-        return self.trigger_collection.trigger_futures_list
+        return self.trigger_collection.trigger_coros_list
 
+class OutputTopicCollection:
+    def __init__(
+        self,
+        config: dict[str, Any],
+        client: aiomqtt.Client,
+        local_context: dict[str, Any],
+        logger: logging.Logger,
+    ):
+        self.config = config
+        self.logger = logger
+        self.local_context = local_context
+        self.client = client
+        self.topics = {}
+
+        if not isinstance(config, dict):
+            raise TypeError("Config for OutputTopicCollection must be a dict")
+        for name, topic_config in self.config.items():
+            self.topics[name] = OutputTopic(
+                topic_config, name, self.client, self.local_context, self.logger
+            )
+
+    def get_coroutines(self):
+        coroutines = []
+        for topic in self.topics.values():
+            coroutines.extend(topic.get_corutines())
+        return coroutines
+
+          
 
 class InputTopicAction:
     _parent_link: "InputTopic"
@@ -370,54 +398,3 @@ class InputTopicCollection:
                 )
 
 
-if __name__ == "__main__":
-    from device import DeviceCollection
-    logger = logging.getLogger()
-
-    with open("./config.json", "r") as F:
-        device_config = json.load(F)["devices"]
-    Devices = DeviceCollection(device_config,logger)
-    with open("config.json") as F:
-        mqtt_config = json.load(F)["mqtt"]
-
-    context = {}
-    client_id = f"BLE proxy-{''.join(random.choices('abcdefghijklmnopqrstuvwxyz0123456789', k=4))}"
-    server_address = mqtt_config.get("serverAddress", None)
-
-    if server_address is None:
-        raise ValueError("Missing server address in config.json")
-
-    server_hostname = server_address.split(":")[0]
-    server_port = 1883
-    if ":" in server_address:
-        server_port = int(server_address.split(":")[-1])
-
-    username = mqtt_config.get("username", None)
-    password = mqtt_config.get("password", None)
-
-    async def main():
-        async with aiomqtt.Client(
-            hostname=server_hostname,
-            port=server_port,
-            username=username,
-            password=password,
-            identifier=client_id,
-        ) as client:
-            Devices.set_send_mqtt_message_handle(client.publish)
-            
-            topic_list = []
-            all_tasks = []
-            for topic_name, topic_config in mqtt_config["topics"]["toSendTo"].items():
-                topic_obj = OutputTopic(
-                    topic_config, topic_name, client, {**locals(), **globals()}, logger
-                )
-                topic_list.append(topic_obj)
-                all_tasks = topic_obj.get_corutines()
-            all_tasks += DeviceCollection.devices_corutines
-            topics = InputTopicCollection(mqtt_config["topics"]["toSubscribeTo"],client,{**locals(), **globals()},logger)
-            all_tasks += [topics.run_routing(),topics.run_subcribe()]
-            await asyncio.gather(*(task for task in all_tasks))
-
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(asyncio.gather(main()))

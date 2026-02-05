@@ -518,12 +518,15 @@ class DeviceCollection:
                 f"Sending MQTT message to topic failed, uninitialized handle '{topic}': {message}"
             )
 
+    def get_corutines(self):
+        return self.devices_corutines
+
 
 if __name__ == "__main__":
     with open("./config.json", "r") as F:
         config = json.load(F)["devices"]
     logger = logging.getLogger()
-    devices = DeviceCollection(config,logger)
+    devices = DeviceCollection(config, logger)
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
