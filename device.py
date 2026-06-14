@@ -230,7 +230,7 @@ class Characteristics:
             )
         except:
             # lost connection to device
-            self.is_connected = False
+            self._parent_link._parent_link.is_connected = False
             return
         await self.load_value(value)
 
@@ -428,9 +428,9 @@ class BleDevice:
                     service._service_obj = self.ble_client.services.get_service(
                         service.uuid
                     )
-                    if service is None:
+                    if service._service_obj is None:
                         self.logger.warning(
-                            f"Service with UUID {service.uid} not found for device {self.name} "
+                            f"Service with UUID {service.uuid} not found for device {self.name} "
                         )
                         continue
 
@@ -438,7 +438,7 @@ class BleDevice:
                         char._char_obj = service._service_obj.get_characteristic(
                             char.uuid
                         )
-                        if char is None:
+                        if char._char_obj is None:
                             self.logger.warning(
                                 f"Characteristic with UUID {char_name} not found in service {service_name} in device {self.name}"
                             )
